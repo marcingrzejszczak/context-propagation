@@ -19,27 +19,55 @@ package io.micrometer.contextpropagation;
 import org.assertj.core.api.BDDAssertions;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 class ReactorTests {
+
+    private Restorable.Scope withScope(ContextView contextView) {
+        return contextView.get(ContextAndScope.class).reactiveMapPropagationContext.makeCurrent();
+    }
+
+    private void decorate(ContextView contextView, Runnable runnable) {
+        try (Restorable.Scope scope = withScope(contextView)) {
+            runnable.run();
+        }
+    }
 
     @Test
     void should_work() {
 
         Mono<String> userCode = Mono.just("HELLO")
                 .transformDeferredContextual((stringMono, contextView) -> {
+
+                    // SecurityContextHolder.get();
+                    // contextView.get(SecurityContext.class);
+
+
                     // If the user wants to modify the context
-                    contextView.get(ContextAndScope.class).scope = contextView.get(ContextAndScope.class).reactiveMapPropagationContext.put(String.class, "HACKED").makeCurrent();
-                    return stringMono;
-                })
-                .doOnNext(s -> printThreadLocal());
+//                    contextView.get(ContextAndScope.class).scope = contextView.get(ContextAndScope.class)
+//                            .reactiveMapPropagationContext.put(String.class, "HACKED").makeCurrent();
+                    return stringMono
+//                            .doOnNext(s -> Reactor.decorate(contextView, () -> log.info))
+                            .doOnNext(s -> {
+                                try (Restorable.Scope scope = withScope(contextView)) {
+                                    // SecurityContextHolder.get();
+                                    // call rest template
+                                        // puts stuff to MDC
+                                }
+                                //                                    Reactor.decorate(contextView, () -> library.call(s));
+                            })
+//                            .doOnNext(s -> library.call(s))
+                            .doOnNext(s -> printThreadLocal());
+                });
 
         Mono<String> ready = Mono
-                .deferContextual(contextView -> userCode.doFinally(signalType -> contextView.get(ContextAndScope.class).scope.close()))
+                .deferContextual(contextView -> userCode.doFinally(signalType -> contextView.get(ContextAndScope.class).scope.close())) // remove stuff from thread local
                 .contextWrite(context -> {
                     printThreadLocal();
                     ReactiveMapPropagationContext reactiveMapPropagationContext = new ReactiveMapPropagationContext(context, new MyThreadLocalRestorable());
-                    Restorable.Scope scope = reactiveMapPropagationContext.makeCurrent();
-                    return context.put(ContextAndScope.class, new ContextAndScope(reactiveMapPropagationContext, scope));
+//                    Restorable.Scope scope = reactiveMapPropagationContext.makeCurrent(); // put stuff to thread local
+//                    return context.put(ContextAndScope.class, new ContextAndScope(reactiveMapPropagationContext, scope));
+                    return context.put(PropagationContext.class, reactiveMapPropagationContext);
                 });
 
         String result = ready.block();

@@ -1,0 +1,44 @@
+= Context Propagation
+
+== What problem are we trying to solve
+
+We want to have 1 API to do the instrumentation with the help of which we will be able to capture and propagate stuff between e.g. threads.
+
+What currently doesn't work
+
+* Transactional is not propagated when using e.g. circuit breakers (threads are being changed)
+* GraphQL
+** Capturing stuff from thread local and create a context (ThreadLocalAccessor)
+* WebMvc gets a request and then WebClient is being used (non-reactive + reactive)
+* WebFlux gets a request and then uses RestTemplate (reactive + non-reactive)
+* Reactor + Slf4j (MDC)
+* Reactor + getting the context
+```java
+@RestController
+class Bla {
+
+    @GetMapping
+    Mono<String> vka() {
+		// no access to the context with Reactor
+        return Mono.just("string").doOnNext(s -> {
+            Context ctx = Reactor.context(); // ?????
+            Transaction.getCurrentTransaction(ctx); // ?????
+        });
+    }
+}
+```
+
+== Problems with the current impl
+
+* `TraceRunnable` requires synchronous access
+
+== Design decisions
+
+=== Reactor
+
+* We would prefer the users to use `transformDeferredContextual` and manually pass in the `contextview` to do the scoping (putting stuff to thread local and removing it)
+
+== TODO
+
+* Which operations should be more explicit (like the Reactor case) and which should be more implicit (Runnable wrapping ??????)
+* Think of developer experience (e.g. someone hasn't propagated the MDC context - we would like to throw an exception / print a report / sth that tells the user about the missing pieces)

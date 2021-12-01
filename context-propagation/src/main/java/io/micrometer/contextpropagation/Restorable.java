@@ -26,6 +26,11 @@ import java.util.List;
  */
 public interface Restorable {
 
+    // TODO: Add filtering? We don't always want to restore a context
+    default boolean isApplicable(PropagationContext propagationContext) {
+        return false;
+    }
+
     /**
      * Makes the propagation context current.
      *
