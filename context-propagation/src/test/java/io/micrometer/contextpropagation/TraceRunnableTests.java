@@ -25,32 +25,54 @@ import org.junit.jupiter.api.Test;
 class TraceRunnableTests {
 
     @Test
-    void should_work() {
-        TraceRunnable traceRunnable = new TraceRunnable(() -> new MapPropagationContext(new ConcurrentHashMap<>(), new MyThreadLocalRestorable()),
-                this::printThreadLocal);
-
+    void should_work() throws Exception {
         ExecutorService executorService = Executors.newSingleThreadExecutor();
+        PropagationContext context = new MapPropagationContext(new ConcurrentHashMap<>(), new ThreadLocalScope());
+        context.put(String.class, "HELLO");
+
         try {
             printThreadLocal();
-            executorService.submit(traceRunnable);
+            executorService.submit(new TraceRunnable(() -> context, this::printThreadLocal)).get();
             printThreadLocal();
-        } finally {
+        }
+        finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void nested_should_work() throws Exception {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        PropagationContext context = new MapPropagationContext(new ConcurrentHashMap<>(), new ThreadLocalScope());
+        context.put(String.class, "INITIAL_VALUE");
+        try (Scope scope = context.makeCurrent()) {
+            printThreadLocal();
+            context.put(String.class, "HELLO");
+            executorService.submit(new TraceRunnable(() -> context, this::printThreadLocal)).get();
+            printThreadLocal();
+        }
+        finally {
             executorService.shutdown();
         }
     }
 
     private void printThreadLocal() {
-        System.out.println("Thread local <" + MyThreadLocalRestorable.threadLocal.get() + ">");
+        System.out.println("Thread local <" + ThreadLocalScope.threadLocal.get() + ">");
     }
 
-    static class MyThreadLocalRestorable implements Restorable {
+    static class ThreadLocalScope implements Scope {
 
         static final ThreadLocal<String> threadLocal = new ThreadLocal<>();
 
         @Override
-        public Scope makeCurrent(PropagationContext context) {
-            threadLocal.set(context.get(String.class));
-            return threadLocal::remove;
+        public Scope open(PropagationContext propagationContext) {
+            threadLocal.set(propagationContext.get(String.class));
+            return this;
+        }
+
+        @Override
+        public void close() {
+            threadLocal.remove();
         }
     }
 }

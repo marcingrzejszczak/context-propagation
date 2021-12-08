@@ -25,8 +25,7 @@ public class TraceRunnable implements Runnable {
 
     public TraceRunnable(SynchronousContextProvider contextProvider, Runnable delegate) {
         this.delegate = delegate;
-        this.contextSnapshot = contextProvider.getContext()
-                .put(String.class, "HELLO");
+        this.contextSnapshot = contextProvider.getContext();
     }
 
     // after the constructor but before run a 3 entry was added we will not see it
@@ -34,7 +33,7 @@ public class TraceRunnable implements Runnable {
     @Override
     public void run() {
         // Puts in thread local and returns the context
-        try (Restorable.Scope scope = contextSnapshot.makeCurrent()) {
+        try (Scope scope = contextSnapshot.makeCurrent()) {
             System.out.println("Inside of scope");
             this.delegate.run();
         }

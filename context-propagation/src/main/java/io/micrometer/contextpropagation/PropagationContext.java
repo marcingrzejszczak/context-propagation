@@ -170,15 +170,15 @@ public interface PropagationContext {
 
 
     /**
-     * Calls restore on all {@link Restorable} elements in the context.
-     * @return scope.
+     * Calls open on all {@link Scope} elements in the context.
+     * @return scope
      */
-    default Restorable.Scope makeCurrent() {
-        return new Restorable.CompositeScope(getRestoreHandlers().stream().map(r -> r.makeCurrent(this)).collect(Collectors.toList()));
+    default Scope makeCurrent() {
+        return new Scope.CompositeScope(getScopes().stream().map(scope -> scope.open(this)).collect(Collectors.toList()));
     }
 
     /**
-     * @return handlers to making a propagation context current
+     * @return scopes to open and make the propagation context current
      */
-    List<Restorable> getRestoreHandlers();
+    List<Scope> getScopes();
 }
