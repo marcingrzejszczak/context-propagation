@@ -19,33 +19,22 @@ package io.micrometer.contextpropagation;
 import java.util.List;
 
 /**
- * A contract for objects that can be restored (e.g. in a new thread).
+ * A contract for objects that can be scoped (e.g. in a new thread).
  *
  * @see PropagationContext
  * @since 1.0.0
  */
-public interface Restorable {
-
-    // TODO: Add filtering? We don't always want to restore a context
-    default boolean isApplicable(PropagationContext propagationContext) {
-        return false;
-    }
-
+public interface Scope extends AutoCloseable {
     /**
-     * Makes the propagation context current.
+     * Opens the scope and makes the propagation context current.
      *
      * @param propagationContext propagation context to make current
-     * @return scope for the propagation context
+     * @return itself
      */
-    Scope makeCurrent(PropagationContext propagationContext);
+    Scope open(PropagationContext propagationContext);
 
-    /**
-     * Scope that must be closed.
-     */
-    interface Scope extends AutoCloseable {
-        @Override
-        void close();
-    }
+    @Override
+    void close();
 
     /**
      * Scope that contains a list of scopes.
@@ -55,6 +44,12 @@ public interface Restorable {
 
         public CompositeScope(List<Scope> scopes) {
             this.scopes = scopes;
+        }
+
+        @Override
+        public Scope open(PropagationContext propagationContext) {
+            this.scopes.forEach(scope -> scope.open(propagationContext));
+            return this;
         }
 
         @Override

@@ -27,12 +27,12 @@ import reactor.util.context.ContextView;
 // TODO: Move this to reactor?
 public class ReactiveMapPropagationContext extends MapPropagationContext {
 
-    public ReactiveMapPropagationContext(ContextView context, List<Restorable> handlers) {
-        super(new ConcurrentHashMap<>(context.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))), handlers);
+    public ReactiveMapPropagationContext(ContextView context, List<Scope> scopes) {
+        super(new ConcurrentHashMap<>(context.stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))), scopes);
     }
 
-    public ReactiveMapPropagationContext(ContextView context, Restorable... handlers) {
-        this(context, Arrays.asList(handlers));
+    public ReactiveMapPropagationContext(ContextView context, Scope... scopes) {
+        this(context, Arrays.asList(scopes));
     }
 
 }

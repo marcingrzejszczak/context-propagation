@@ -23,12 +23,12 @@ import reactor.util.context.ContextView;
 
 class ReactorTests {
 
-    private Restorable.Scope withScope(ContextView contextView) {
+    private Scope withScope(ContextView contextView) {
         return contextView.get(ContextAndScope.class).reactiveMapPropagationContext.makeCurrent();
     }
 
     private void decorate(ContextView contextView, Runnable runnable) {
-        try (Restorable.Scope scope = withScope(contextView)) {
+        try (Scope scope = withScope(contextView)) {
             runnable.run();
         }
     }
@@ -49,7 +49,7 @@ class ReactorTests {
                     return stringMono
 //                            .doOnNext(s -> Reactor.decorate(contextView, () -> log.info))
                             .doOnNext(s -> {
-                                try (Restorable.Scope scope = withScope(contextView)) {
+                                try (Scope scope = withScope(contextView)) {
                                     // SecurityContextHolder.get();
                                     // call rest template
                                         // puts stuff to MDC
@@ -64,10 +64,9 @@ class ReactorTests {
                 .deferContextual(contextView -> userCode.doFinally(signalType -> contextView.get(ContextAndScope.class).scope.close())) // remove stuff from thread local
                 .contextWrite(context -> {
                     printThreadLocal();
-                    ReactiveMapPropagationContext reactiveMapPropagationContext = new ReactiveMapPropagationContext(context, new MyThreadLocalRestorable());
-//                    Restorable.Scope scope = reactiveMapPropagationContext.makeCurrent(); // put stuff to thread local
-//                    return context.put(ContextAndScope.class, new ContextAndScope(reactiveMapPropagationContext, scope));
-                    return context.put(PropagationContext.class, reactiveMapPropagationContext);
+                    ReactiveMapPropagationContext reactiveMapPropagationContext = new ReactiveMapPropagationContext(context, new ThreadLocalScope());
+                    Scope scope = reactiveMapPropagationContext.makeCurrent();
+                    return context.put(ContextAndScope.class, new ContextAndScope(reactiveMapPropagationContext, scope));
                 });
 
         String result = ready.block();
@@ -76,31 +75,36 @@ class ReactorTests {
     }
 
     private void printThreadLocal() {
-        System.out.println("Thread local <" + MyThreadLocalRestorable.threadLocal.get() + ">");
+        System.out.println("Thread local <" + ThreadLocalScope.threadLocal.get() + ">");
     }
 
     // TODO: Add stacking mechanism
     static class ContextAndScope {
         ReactiveMapPropagationContext reactiveMapPropagationContext;
-        Restorable.Scope scope;
+        Scope scope;
 
-        ContextAndScope(ReactiveMapPropagationContext reactiveMapPropagationContext, Restorable.Scope scope) {
+        ContextAndScope(ReactiveMapPropagationContext reactiveMapPropagationContext, Scope scope) {
             this.reactiveMapPropagationContext = reactiveMapPropagationContext;
             this.scope = scope;
         }
     }
 
-    static class MyThreadLocalRestorable implements Restorable {
+    static class ThreadLocalScope implements Scope {
 
         static final ThreadLocal<String> threadLocal = new ThreadLocal<>();
 
         @Override
-        public Scope makeCurrent(PropagationContext context) {
-            if (!context.hasKey(String.class)) {
-                return () -> { };
+        public Scope open(PropagationContext propagationContext) {
+            if (!propagationContext.hasKey(String.class)) {
+                return this;
             }
-            threadLocal.set(context.get(String.class));
-            return threadLocal::remove;
+            threadLocal.set(propagationContext.get(String.class));
+            return this;
+        }
+
+        @Override
+        public void close() {
+            threadLocal.remove();
         }
     }
 }

@@ -22,35 +22,74 @@ import java.util.concurrent.Executors;
 
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class TraceRunnableTests {
 
     @Test
-    void should_work() {
-        TraceRunnable traceRunnable = new TraceRunnable(() -> new MapPropagationContext(new ConcurrentHashMap<>(), new MyThreadLocalRestorable()),
-                this::printThreadLocal);
-
+    void noOuterScopeShouldWork() throws Exception {
         ExecutorService executorService = Executors.newSingleThreadExecutor();
+        PropagationContext context = new MapPropagationContext(new ConcurrentHashMap<>(), new ThreadLocalScope());
+        context.put(String.class, "HELLO");
+
         try {
             printThreadLocal();
-            executorService.submit(traceRunnable);
+            assertThat(ThreadLocalScope.threadLocal.get()).isNull();
+
+            executorService.submit(new TraceRunnable(() -> context, () -> {
+                printThreadLocal();
+                assertThat(ThreadLocalScope.threadLocal.get()).isEqualTo("HELLO");
+            })).get();
+
             printThreadLocal();
-        } finally {
+            assertThat(ThreadLocalScope.threadLocal.get()).isNull();
+        }
+        finally {
+            executorService.shutdown();
+        }
+    }
+
+    @Test
+    void nestedScopeShouldWork() throws Exception {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        PropagationContext context = new MapPropagationContext(new ConcurrentHashMap<>(), new ThreadLocalScope());
+        context.put(String.class, "INITIAL_VALUE");
+
+        try (Scope scope = context.makeCurrent()) {
+            printThreadLocal();
+            assertThat(ThreadLocalScope.threadLocal.get()).isEqualTo("INITIAL_VALUE");
+            context.put(String.class, "HELLO");
+
+            executorService.submit(new TraceRunnable(() -> context, () -> {
+                printThreadLocal();
+                assertThat(ThreadLocalScope.threadLocal.get()).isEqualTo("HELLO");
+            })).get();
+
+            printThreadLocal();
+            assertThat(ThreadLocalScope.threadLocal.get()).isEqualTo("INITIAL_VALUE");
+        }
+        finally {
             executorService.shutdown();
         }
     }
 
     private void printThreadLocal() {
-        System.out.println("Thread local <" + MyThreadLocalRestorable.threadLocal.get() + ">");
+        System.out.println("Thread local <" + ThreadLocalScope.threadLocal.get() + ">");
     }
 
-    static class MyThreadLocalRestorable implements Restorable {
+    static class ThreadLocalScope implements Scope {
 
         static final ThreadLocal<String> threadLocal = new ThreadLocal<>();
 
         @Override
-        public Scope makeCurrent(PropagationContext context) {
-            threadLocal.set(context.get(String.class));
-            return threadLocal::remove;
+        public Scope open(PropagationContext propagationContext) {
+            threadLocal.set(propagationContext.get(String.class));
+            return this;
+        }
+
+        @Override
+        public void close() {
+            threadLocal.remove();
         }
     }
 }

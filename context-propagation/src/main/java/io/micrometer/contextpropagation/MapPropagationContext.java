@@ -25,16 +25,16 @@ public class MapPropagationContext implements PropagationContext {
 
     private final Map<Object, Object> map;
 
-    private final List<Restorable> handlers;
+    private final List<Scope> scopes;
 
-    public MapPropagationContext(Map<Object, Object> map, List<Restorable> handlers) {
+    public MapPropagationContext(Map<Object, Object> map, List<Scope> scopes) {
         this.map = map;
-        this.handlers = handlers;
+        this.scopes = scopes;
     }
 
-    public MapPropagationContext(Map<Object, Object> map, Restorable... handlers) {
+    public MapPropagationContext(Map<Object, Object> map, Scope... scopes) {
         this.map = map;
-        this.handlers = Arrays.asList(handlers);
+        this.scopes = Arrays.asList(scopes);
     }
 
     @Override
@@ -76,8 +76,8 @@ public class MapPropagationContext implements PropagationContext {
     }
 
     @Override
-    public List<Restorable> getRestoreHandlers() {
-        return this.handlers;
+    public List<Scope> getScopes() {
+        return this.scopes;
     }
 
 }
